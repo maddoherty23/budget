@@ -1,0 +1,13 @@
+[debug] [2025-12-22T18:21:51.662Z] ----------------------------------------------------------------------
+[debug] [2025-12-22T18:21:51.706Z] Command:       /Users/madisondoherty/.nvm/versions/node/v20.19.6/bin/node /opt/homebrew/bin/firebase login --reauth
+[debug] [2025-12-22T18:21:51.707Z] CLI Version:   13.35.1
+[debug] [2025-12-22T18:21:51.707Z] Platform:      darwin
+[debug] [2025-12-22T18:21:51.707Z] Node Version:  v20.19.6
+[debug] [2025-12-22T18:21:51.707Z] Time:          Mon Dec 22 2025 10:21:51 GMT-0800 (Pacific Standard Time)
+[debug] [2025-12-22T18:21:51.707Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+[info] Visit this URL on this device to log in:
+[info] https://accounts.google.com/o/oauth2/auth?client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com&scope=email%20openid%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloudplatformprojects.readonly%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Ffirebase%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&response_type=code&state=372053297&redirect_uri=http%3A%2F%2Flocalhost%3A9005&login_hint=accumoldserver%40gmail.com
+[info] 
+[info] Waiting for authentication...
