@@ -1,14 +1,13 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
+  PiggyBank, 
   LayoutDashboard, 
   Wallet, 
   ArrowLeftRight, 
   BarChart3, 
   Settings,
-  PiggyBank,
   Menu,
   X,
   Shield,
@@ -18,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -34,7 +34,17 @@ const navItems = [
 
 export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Get user display name and initials
+  const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
+  const initials = displayName
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <div className="min-h-screen bg-background">
@@ -97,11 +107,11 @@ export function AppLayout({ children }: AppLayoutProps) {
             {/* User Section */}
             <div className="flex items-center gap-3 rounded-lg bg-secondary/50 px-4 py-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <span className="text-sm font-semibold">JD</span>
+                <span className="text-sm font-semibold">{initials}</span>
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">Jamie Doe</p>
-                <p className="text-xs text-muted-foreground">Free Plan</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
             </div>
           </div>

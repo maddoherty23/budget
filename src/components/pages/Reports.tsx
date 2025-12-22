@@ -89,13 +89,6 @@ const displayOptions = [
   { id: "years", label: "Years" },
 ];
 
-// Mock income sources
-const incomeSources = [
-  { id: "salary", name: "Salary & Wages", amount: 5200 },
-  { id: "freelance", name: "Freelance Income", amount: 800 },
-  { id: "interest", name: "Interest Income", amount: 45 },
-  { id: "other", name: "Other Income", amount: 0 },
-];
 
 // Accounting basis options
 const accountingBasis = [
@@ -215,11 +208,7 @@ export default function Reports() {
   const getTransactionsForCategory = (categoryName: string, type: 'income' | 'expense') => {
     return transactions.filter(t => {
       if (type === 'income') {
-        // Map income source names to transaction categories
-        if (categoryName === 'Salary & Wages') return t.category === 'Income' && t.description.toLowerCase().includes('paycheck');
-        if (categoryName === 'Freelance Income') return t.category === 'Income' && t.description.toLowerCase().includes('freelance');
-        if (categoryName === 'Interest Income') return t.category === 'Income' && t.description.toLowerCase().includes('interest');
-        return t.category === 'Income';
+        return t.type === 'income' && (t.category === categoryName || t.category === 'Income');
       } else {
         return t.category === categoryName && t.type === 'expense';
       }
@@ -260,6 +249,24 @@ export default function Reports() {
   };
 
   const multiplier = getMultiplier();
+  
+  // Calculate real income from transactions grouped by category
+  const incomeSources = useMemo(() => {
+    const incomeTransactions = transactions.filter(t => t.type === 'income');
+    
+    // Group income by category
+    const grouped = incomeTransactions.reduce((acc, t) => {
+      const category = t.category || 'Other Income';
+      if (!acc[category]) {
+        acc[category] = { id: category.toLowerCase().replace(/\s+/g, '-'), name: category, amount: 0 };
+      }
+      acc[category].amount += Math.abs(t.amount);
+      return acc;
+    }, {} as Record<string, { id: string; name: string; amount: number }>);
+    
+    return Object.values(grouped);
+  }, [transactions]);
+  
   const totalIncome = incomeSources.reduce((sum, s) => sum + s.amount, 0) * multiplier;
   
   // Group expenses by category type (using filtered categories)
