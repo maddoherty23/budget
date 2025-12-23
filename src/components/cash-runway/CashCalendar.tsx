@@ -30,7 +30,13 @@ export default function CashCalendar({ forecast }: CashCalendarProps) {
   // Create a map of dates to forecast data
   const dateMap = new Map();
   forecast.dailyBalances.forEach((day) => {
-    const dateKey = day.date.toISOString().split("T")[0];
+    // Handle both Date objects and Timestamps
+    const dateObj = day.date instanceof Date 
+      ? day.date 
+      : typeof day.date.toDate === 'function' 
+      ? day.date.toDate() 
+      : new Date(day.date);
+    const dateKey = dateObj.toISOString().split("T")[0];
     dateMap.set(dateKey, day);
   });
 
@@ -133,13 +139,13 @@ export default function CashCalendar({ forecast }: CashCalendarProps) {
             return (
               <div
                 key={day}
-                className={`aspect-square border rounded-lg p-2 ${getDayClassName(data)} ${
+                className={`aspect-square border rounded-lg p-2 flex flex-col ${getDayClassName(data)} ${
                   isToday ? "ring-2 ring-blue-500" : ""
                 } hover:shadow-md transition-shadow cursor-pointer`}
               >
-                <div className="text-sm font-semibold mb-1">{day}</div>
+                <div className="text-sm font-semibold mb-auto">{day}</div>
                 {data && (
-                  <div className="text-xs">
+                  <div className="text-xs font-medium mt-auto">
                     ${(data.balance / 1000).toFixed(1)}k
                   </div>
                 )}

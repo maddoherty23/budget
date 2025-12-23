@@ -10,13 +10,21 @@ interface ForecastChartProps {
 
 export default function ForecastChart({ forecast }: ForecastChartProps) {
   // Prepare chart data
-  const chartData = forecast.dailyBalances.map((day) => ({
-    date: day.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    fullDate: day.date,
-    balance: day.balance,
-    isRedDay: day.isRedDay,
-    isBufferLow: day.isBufferLow,
-  }));
+  const chartData = forecast.dailyBalances.map((day) => {
+    // Handle both Date objects and Timestamps
+    const dateObj = day.date instanceof Date 
+      ? day.date 
+      : typeof day.date.toDate === 'function' 
+      ? day.date.toDate() 
+      : new Date(day.date);
+    return {
+      date: dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      fullDate: dateObj,
+      balance: day.balance,
+      isRedDay: day.isRedDay,
+      isBufferLow: day.isBufferLow,
+    };
+  });
 
   // Custom tooltip
   const CustomTooltip = ({ active, payload }: any) => {

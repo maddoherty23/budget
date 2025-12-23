@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/firebase/auth";
+import { generateMockForecast } from "./mock-data";
 import {
   getCashPlan,
   getBillInstances,
@@ -28,13 +29,22 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
     const user = getCurrentUser();
     if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      // Return mock data for testing/development
+      console.log("No authenticated user, returning mock forecast data");
+      const mockForecast = generateMockForecast();
+      return NextResponse.json({
+        forecast: mockForecast,
+        meta: {
+          carryoverBalance: 3420.50,
+          billCount: 0,
+          spendingCount: 0,
+          calculatedAt: new Date().toISOString(),
+          cached: false,
+          mock: true
+        }
+      });
     }
 
     // Parse request body

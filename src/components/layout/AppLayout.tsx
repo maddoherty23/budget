@@ -14,7 +14,11 @@ import {
   Mail,
   Tags,
   Briefcase,
-  Sparkles
+  Sparkles,
+  TrendingUp,
+  Calendar,
+  Sheet,
+  Banknote
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -34,6 +38,10 @@ const navItems = [
   { path: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { path: "/reports", label: "Reports", icon: BarChart3 },
   { path: "/categories", label: "Categories", icon: Tags },
+  { path: "/cash-runway", label: "Cash Runway", icon: TrendingUp },
+  { path: "/calendar", label: "Calendar", icon: Calendar },
+  { path: "/spreadsheet", label: "Spreadsheet", icon: Sheet },
+  { path: "/income-settings", label: "Income Sources", icon: Banknote },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
 

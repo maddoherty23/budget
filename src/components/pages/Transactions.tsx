@@ -350,8 +350,9 @@ export default function Transactions() {
       
       // Initialize open/order state when accounts load
       const accountIds = accts.map(a => a.id);
-      setOpenAccounts(accountIds);
-      setAccountOrder(accountIds);
+      // Add 'unassigned' to show imported transactions without accountId
+      setOpenAccounts([...accountIds, 'unassigned']);
+      setAccountOrder([...accountIds, 'unassigned']);
     }, (error) => {
       console.error('Error fetching accounts:', error);
     });
@@ -375,7 +376,8 @@ export default function Transactions() {
     const matchesSearch = transaction.description
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
-    const matchesAccount = selectedAccount === "all" || transaction.accountId === selectedAccount;
+    const actualAccountId = transaction.accountId || 'unassigned';
+    const matchesAccount = selectedAccount === "all" || actualAccountId === selectedAccount;
     const isUncategorized = !transaction.category || transaction.category === "Uncategorized";
     const isExcluded = transaction.category === "Exclude";
     const isCategorized = transaction.category && transaction.category !== "Uncategorized" && transaction.category !== "Exclude";
@@ -430,9 +432,9 @@ export default function Transactions() {
     }
   };
 
-  // Group transactions by account
+  // Group transactions by account (including unassigned)
   const groupedByAccount = filteredTransactions.reduce((groups, transaction) => {
-    const accountId = transaction.accountId;
+    const accountId = transaction.accountId || 'unassigned';
     if (!groups[accountId]) {
       groups[accountId] = [];
     }
@@ -607,6 +609,9 @@ export default function Transactions() {
                   {account.name}
                 </SelectItem>
               ))}
+              {groupedByAccount['unassigned']?.length > 0 && (
+                <SelectItem value="unassigned">Imported Transactions</SelectItem>
+              )}
             </SelectContent>
           </Select>
 
@@ -674,6 +679,170 @@ export default function Transactions() {
           <SortableContext items={accountOrder} strategy={verticalListSortingStrategy}>
             <div className="space-y-4">
               {accountOrder.map((accountId) => {
+                // Handle unassigned transactions (imported via PDF without account)
+                if (accountId === 'unassigned') {
+                  const unassignedTransactions = groupedByAccount['unassigned'] || [];
+                  if (unassignedTransactions.length === 0) return null;
+                  
+                  const isOpen = openAccounts.includes('unassigned');
+                  const transactionsByDate = groupTransactionsByDate(unassignedTransactions);
+                  const totalIn = unassignedTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+                  const totalOut = unassignedTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+                  
+                  return (
+                    <SortableAccount
+                      key="unassigned"
+                      account={{
+                        id: 'unassigned',
+                        name: 'Imported Transactions',
+                        type: 'unassigned',
+                        balance: 0,
+                        institution: 'PDF Import'
+                      }}
+                      isOpen={isOpen}
+                      onToggle={() => toggleAccount('unassigned')}
+                      transactionCount={unassignedTransactions.length}
+                    >
+                      <div className="border-t border-border">
+                        {/* Account Summary Row */}
+                        <div className="flex items-center justify-between bg-secondary/30 px-4 py-2 text-sm">
+                          <div className="flex items-center gap-4">
+                            <span className="text-muted-foreground">This period:</span>
+                            <span className="text-success">+{formatCurrency(totalIn)} in</span>
+                            <span className="text-foreground">-{formatCurrency(totalOut)} out</span>
+                          </div>
+                        </div>
+
+                        {/* Transactions by Date */}
+                        {Object.entries(transactionsByDate)
+                          .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
+                          .map(([date, dateTransactions]) => (
+                            <div key={date}>
+                              <div className="bg-secondary/20 px-4 py-2 text-xs font-medium text-muted-foreground">
+                                {formatDate(date)}
+                              </div>
+                              {dateTransactions.map((transaction, index) => {
+                                const isIncome = transaction.type === "income";
+                                const isUncategorized = !transaction.category || transaction.category === "Uncategorized";
+                                const isExcluded = transaction.category === "Exclude";
+                                const showSimpleView = statusFilter === "categorized" || statusFilter === "excluded";
+
+                                return (
+                                  <div
+                                    key={transaction.id}
+                                    className={cn(
+                                      "flex items-center gap-4 px-4 py-3 transition-colors hover:bg-secondary/30",
+                                      index !== dateTransactions.length - 1 && "border-b border-border/50",
+                                      isUncategorized && "bg-warning/5"
+                                    )}
+                                  >
+                                    {/* Checkbox for simple view */}
+                                    {showSimpleView && (
+                                      <input 
+                                        type="checkbox" 
+                                        className="h-4 w-4 rounded border-border"
+                                      />
+                                    )}
+
+                                    {/* Icon - only show in for-review */}
+                                    {!showSimpleView && (
+                                      <div className={cn(
+                                        "flex h-9 w-9 items-center justify-center rounded-lg",
+                                        isExcluded ? "bg-muted" :
+                                        isIncome ? "bg-success/10" : 
+                                        isUncategorized ? "bg-warning/10" : "bg-secondary"
+                                      )}>
+                                        {isExcluded ? (
+                                          <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                                        ) : isIncome ? (
+                                          <ArrowDownRight className="h-4 w-4 text-success" />
+                                        ) : isUncategorized ? (
+                                          <Tag className="h-4 w-4 text-warning" />
+                                        ) : (
+                                          <span className="text-base">{getCategoryIcon(transaction.category)}</span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Details */}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium truncate text-sm text-foreground">
+                                        {transaction.description}
+                                      </p>
+                                      {!showSimpleView && (
+                                        <Select 
+                                          value={pendingCategories[transaction.id] || transaction.category || "Uncategorized"}
+                                          onValueChange={(value) => handleCategorySelect(transaction.id, value)}
+                                        >
+                                          <SelectTrigger className={cn(
+                                            "h-6 w-auto border-0 bg-transparent p-0 text-xs hover:bg-secondary/50",
+                                            (pendingCategories[transaction.id] && pendingCategories[transaction.id] !== "Uncategorized") 
+                                              ? "text-primary font-medium" 
+                                              : isUncategorized 
+                                                ? "text-warning" 
+                                                : "text-muted-foreground"
+                                          )}>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="Uncategorized">
+                                              <span className="flex items-center gap-2">
+                                                <Tag className="h-3 w-3" />
+                                                Uncategorized
+                                              </span>
+                                            </SelectItem>
+                                            {allBudgetCategories.map((cat) => (
+                                              <SelectItem key={cat.id} value={cat.name}>
+                                                <span className="flex items-center gap-2">
+                                                  <span>{cat.icon}</span>
+                                                  {cat.name}
+                                                </span>
+                                              </SelectItem>
+                                            ))}
+                                            <SelectItem value="Exclude">
+                                              <span className="flex items-center gap-2 text-muted-foreground">
+                                                <Ban className="h-3 w-3" />
+                                                Exclude (Transfer/Internal)
+                                              </span>
+                                            </SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      )}
+                                      {showSimpleView && transaction.category && (
+                                        <p className="text-xs text-muted-foreground">{transaction.category}</p>
+                                      )}
+                                    </div>
+
+                                    {/* Amount and Add button */}
+                                    <div className="flex items-center gap-2">
+                                      <p className={cn(
+                                        "font-semibold whitespace-nowrap",
+                                        isIncome ? "text-success" : "text-foreground"
+                                      )}>
+                                        {isIncome ? "+" : "-"}{formatCurrency(Math.abs(transaction.amount))}
+                                      </p>
+                                      
+                                      {/* Show Add button when a pending category is selected */}
+                                      {pendingCategories[transaction.id] && pendingCategories[transaction.id] !== "Uncategorized" && (
+                                        <Button
+                                          size="sm"
+                                          className="h-7 px-3"
+                                          onClick={() => handleAddTransaction(transaction.id)}
+                                        >
+                                          Add
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                      </div>
+                    </SortableAccount>
+                  );
+                }
+                
                 const account = accounts.find(a => a.id === accountId);
                 if (!account) return null;
                 

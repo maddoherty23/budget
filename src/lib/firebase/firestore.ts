@@ -41,8 +41,21 @@ export interface Transaction {
   category: string;
   description: string;
   date: Timestamp;
+  statementId?: string; // Link to imported statement
+  hash?: string; // Deduplication hash
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+export interface Statement {
+  id?: string;
+  userId: string;
+  createdAt?: Timestamp;
+  source: "pdf_upload" | "manual";
+  filename: string;
+  status: "parsing" | "parsed" | "failed";
+  transactionCount: number;
+  errors: string[];
 }
 
 export interface Category {
@@ -229,6 +242,22 @@ export const getCategories = (constraints: QueryConstraint[] = []) =>
 
 export const deleteCategory = (id: string) =>
   deleteDocument("categories", id);
+
+// Statement-specific functions
+export const createStatement = (data: Omit<Statement, "id" | "userId" | "createdAt">) =>
+  createDocument<Statement>("statements", data);
+
+export const getStatement = (id: string) =>
+  getDocument<Statement>("statements", id);
+
+export const getStatements = (constraints: QueryConstraint[] = []) =>
+  getDocuments<Statement>("statements", constraints);
+
+export const updateStatement = (id: string, data: Partial<Statement>) =>
+  updateDocument<Statement>("statements", id, data);
+
+export const deleteStatement = (id: string) =>
+  deleteDocument("statements", id);
 
 // UserPreferences-specific functions
 export const getUserPreferences = async (): Promise<UserPreferences | null> => {
