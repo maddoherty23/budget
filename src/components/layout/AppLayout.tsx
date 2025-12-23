@@ -12,12 +12,17 @@ import {
   X,
   Shield,
   Mail,
-  Tags
+  Tags,
+  Briefcase,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
+import { useViewMode } from "@/lib/contexts/ViewModeContext";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -35,6 +40,7 @@ const navItems = [
 export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { viewMode, setViewMode } = useViewMode();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Get user display name and initials
@@ -45,6 +51,16 @@ export function AppLayout({ children }: AppLayoutProps) {
     .join('')
     .toUpperCase()
     .slice(0, 2);
+
+  const handleToggleViewMode = async () => {
+    const newMode = viewMode === "simple" ? "cfo" : "simple";
+    try {
+      await setViewMode(newMode);
+      toast.success(`Switched to ${newMode === "cfo" ? "Household CFO" : "Simple"} Mode`);
+    } catch (error) {
+      toast.error("Failed to switch view mode");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,6 +74,30 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
             <span className="text-xl font-bold text-foreground">Budget Buddy</span>
           </div>
+
+          {/* View Mode Toggle */}
+          {user && (
+            <div className="border-b border-border px-4 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleViewMode}
+                className="w-full justify-start gap-2 text-xs"
+              >
+                {viewMode === "cfo" ? (
+                  <>
+                    <Briefcase className="h-4 w-4" />
+                    <span>Household CFO Mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    <span>Simple Mode</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
 
           {/* Navigation */}
           <nav className="flex-1 space-y-1 p-4">
@@ -161,6 +201,30 @@ export function AppLayout({ children }: AppLayoutProps) {
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="fixed right-0 top-16 z-50 h-[calc(100vh-4rem)] w-64 border-l border-border bg-card p-4 lg:hidden"
           >
+            {/* View Mode Toggle - Mobile */}
+            {user && (
+              <div className="mb-4 pb-4 border-b border-border">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToggleViewMode}
+                  className="w-full justify-start gap-2 text-xs"
+                >
+                  {viewMode === "cfo" ? (
+                    <>
+                      <Briefcase className="h-4 w-4" />
+                      <span>Household CFO Mode</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      <span>Simple Mode</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
             <div className="space-y-1">
               {navItems.map((item) => {
                 const isActive = pathname === item.path;

@@ -88,6 +88,72 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
+    // User preferences collection - user-scoped access
+    match /userPreferences/{prefId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && hasValidUserId();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // ========================================================================
+    // Cash Runway Collections
+    // ========================================================================
+    
+    // Cash Plans - one per user, keyed by userId
+    match /cashPlans/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Bill Templates - user-scoped access
+    match /billTemplates/{templateId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && hasValidUserId();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Bill Instances - user-scoped access
+    match /billInstances/{instanceId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && hasValidUserId();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Planned Spending - user-scoped access
+    match /plannedSpending/{spendingId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && hasValidUserId();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Cash Forecasts - read-only for users, backend writes only
+    match /cashForecasts/{forecastId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow write: if false; // Only backend can write
+    }
+    
+    // Alerts - user-scoped access
+    match /alerts/{alertId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && hasValidUserId();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Recommendations - read-only for users, backend writes only
+    match /recommendations/{recId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow write: if false; // Only backend can write
+    }
+    
+    // Bill Matches - user access through linked bills
+    match /billMatches/{matchId} {
+      allow read, write: if isAuthenticated();
+    }
+    
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

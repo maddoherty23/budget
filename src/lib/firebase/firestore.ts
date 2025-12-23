@@ -55,6 +55,14 @@ export interface Category {
   createdAt?: Timestamp;
 }
 
+export interface UserPreferences {
+  id?: string;
+  userId: string;
+  viewMode: "simple" | "cfo";
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 // Helper to ensure user is authenticated
 const ensureAuth = (): string => {
   const user = getCurrentUser();
@@ -221,6 +229,60 @@ export const getCategories = (constraints: QueryConstraint[] = []) =>
 
 export const deleteCategory = (id: string) =>
   deleteDocument("categories", id);
+
+// UserPreferences-specific functions
+export const getUserPreferences = async (): Promise<UserPreferences | null> => {
+  const userId = ensureAuth();
+  
+  try {
+    const preferences = await getDocuments<UserPreferences>("userPreferences", [
+      limit(1)
+    ]);
+    
+    if (preferences.length === 0) {
+      // Create default preferences if none exist
+      const defaultPrefs: Omit<UserPreferences, "id" | "userId" | "createdAt" | "updatedAt"> = {
+        viewMode: "simple",
+      };
+      const id = await createDocument<UserPreferences>("userPreferences", defaultPrefs);
+      return {
+        id,
+        userId,
+        viewMode: "simple",
+      };
+    }
+    
+    return preferences[0];
+  } catch (error) {
+    console.error("Error getting user preferences:", error);
+    return null;
+  }
+};
+
+export const updateUserPreferences = async (
+  data: Partial<Omit<UserPreferences, "id" | "userId" | "createdAt" | "updatedAt">>
+): Promise<void> => {
+  const userId = ensureAuth();
+  
+  try {
+    const preferences = await getDocuments<UserPreferences>("userPreferences", [
+      limit(1)
+    ]);
+    
+    if (preferences.length === 0) {
+      // Create if doesn't exist
+      await createDocument<UserPreferences>("userPreferences", {
+        viewMode: data.viewMode || "simple",
+      });
+    } else {
+      // Update existing
+      await updateDocument<UserPreferences>("userPreferences", preferences[0].id!, data);
+    }
+  } catch (error) {
+    console.error("Error updating user preferences:", error);
+    throw error;
+  }
+};
 
 // Utility exports for building queries
 export { where, orderBy, limit, Timestamp };

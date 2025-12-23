@@ -20,7 +20,10 @@ import {
   Landmark,
   LogOut,
   Loader2,
-  Building2
+  Building2,
+  Monitor,
+  Briefcase,
+  Sparkles
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatCurrency } from "@/lib/mockData";
@@ -30,6 +33,8 @@ import { useAuth, signOut } from "@/lib/firebase";
 import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useRouter } from "next/navigation";
+import { useViewMode } from "@/lib/contexts/ViewModeContext";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const currencies = [
   { code: "CAD", name: "Canadian Dollar", symbol: "$" },
@@ -50,6 +55,7 @@ interface ConnectedAccount {
 export default function Settings() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { viewMode, setViewMode } = useViewMode();
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [name, setName] = useState("");
@@ -130,6 +136,15 @@ export default function Settings() {
     } catch (error) {
       console.error('Error deleting account:', error);
       toast.error("Failed to disconnect account");
+    }
+  };
+
+  const handleViewModeChange = async (mode: "simple" | "cfo") => {
+    try {
+      await setViewMode(mode);
+      toast.success(`Display mode updated to ${mode === "cfo" ? "Household CFO" : "Simple"} Mode`);
+    } catch (error) {
+      toast.error("Failed to update display mode");
     }
   };
 
@@ -229,11 +244,60 @@ export default function Settings() {
           </div>
         </motion.div>
 
-        {/* Connected Accounts */}
+        {/* Display Mode */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
+          className="rounded-2xl border border-border bg-card p-6"
+        >
+          <div className="mb-6 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Monitor className="h-5 w-5" />
+            </div>
+            <h2 className="text-lg font-semibold text-foreground">Display Mode</h2>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Choose how you want to view your financial data
+            </p>
+
+            <RadioGroup value={viewMode} onValueChange={handleViewModeChange}>
+              <div className="flex items-start space-x-3 rounded-lg border border-border p-4 hover:bg-secondary/30 transition-colors">
+                <RadioGroupItem value="simple" id="simple" className="mt-1" />
+                <div className="flex-1">
+                  <Label htmlFor="simple" className="flex items-center gap-2 cursor-pointer">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    <span className="font-semibold">Simple Mode</span>
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    User-friendly interface with colorful charts and graphs. Perfect for everyday budgeting.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3 rounded-lg border border-border p-4 hover:bg-secondary/30 transition-colors">
+                <RadioGroupItem value="cfo" id="cfo" className="mt-1" />
+                <div className="flex-1">
+                  <Label htmlFor="cfo" className="flex items-center gap-2 cursor-pointer">
+                    <Briefcase className="h-5 w-5 text-primary" />
+                    <span className="font-semibold">Household CFO Mode</span>
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Professional QuickBooks-style tables with detailed financial data. Ideal for power users.
+                  </p>
+                </div>
+              </div>
+            </RadioGroup>
+          </div>
+        </motion.div>
+
+        {/* Connected Accounts */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
           className="rounded-2xl border border-border bg-card p-6"
         >
           <div className="mb-6 flex items-center justify-between">
@@ -314,7 +378,7 @@ export default function Settings() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.3 }}
         >
           <Button 
             variant="outline" 
