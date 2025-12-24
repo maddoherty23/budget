@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
       horizonDays = 90,
       bufferFloor: requestedBufferFloor,
       scenarioEdits,
+      forceRefresh = false,
     } = body;
 
     // Step 1: Load or create cash plan
@@ -116,9 +117,96 @@ export async function POST(request: NextRequest) {
       where("isActive", "==", true)
     ]);
 
-    // Step 5: Build forecast inputs
+    // Step 5: Build forecast inputs - set start date first
     const startDate = new Date();
     startDate.setHours(0, 0, 0, 0); // Start of today
+    const endDate = new Date(startDate.getTime() + actualHorizonDays * 24 * 60 * 60 * 1000);
+    
+    // Step 6: Load transactions from hierarchical structure (both income and expense)
+    const incomeEvents = [];
+    const expenseEvents = [];
+    
+    // Generate list of months to query (from now through horizon)
+    const monthsToQuery: string[] = [];
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const month = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthsToQuery.includes(month)) {
+        monthsToQuery.push(month);
+      }
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+    
+    // Fetch transactions from each month
+    console.log(`[Cash Runway] Querying ${monthsToQuery.length} months for transactions:`, monthsToQuery);
+    
+    for (const month of monthsToQuery) {
+      const monthPath = `transactions/${user.uid}/${month}`;
+      const monthCollection = collection(db, monthPath);
+      
+      // Fetch income transactions
+      const incomeQuery = query(
+        monthCollection,
+        where("type", "==", "income")
+      );
+      
+      const incomeSnapshot = await getDocs(incomeQuery);
+      incomeSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const txnDate = data.date?.toDate?.() || new Date();
+        
+        // Only include transactions within the forecast horizon
+        // Skip excluded transactions (transfers)
+        if (txnDate >= startDate && txnDate <= endDate && data.category !== "Exclude") {
+          incomeEvents.push({
+            id: doc.id,
+            date: txnDate.toISOString().split('T')[0], // YYYY-MM-DD format
+            amount: Math.abs(data.amount), // Ensure positive for income
+            kind: "income" as const,
+            meta: {
+              name: data.description || "Income",
+              category: data.category,
+            },
+          });
+        }
+      });
+      
+      // Fetch expense transactions
+      const expenseQuery = query(
+        monthCollection,
+        where("type", "==", "expense")
+      );
+      
+      const expenseSnapshot = await getDocs(expenseQuery);
+      expenseSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const txnDate = data.date?.toDate?.() || new Date();
+        
+        // Only include transactions within the forecast horizon
+        // Skip excluded transactions (transfers) and uncategorized
+        if (txnDate >= startDate && txnDate <= endDate && 
+            data.category !== "Exclude" && 
+            data.category && 
+            data.category !== "Uncategorized") {
+          expenseEvents.push({
+            id: doc.id,
+            date: txnDate.toISOString().split('T')[0], // YYYY-MM-DD format
+            amount: -Math.abs(data.amount), // Ensure negative for expense
+            kind: "bill" as const, // Treat as bill for cash runway
+            meta: {
+              name: data.description || "Expense",
+              category: data.category,
+            },
+          });
+        }
+      });
+    }
+    
+    console.log(`[Cash Runway] Loaded transactions - Income: ${incomeEvents.length}, Expenses: ${expenseEvents.length}`);
+
+    // Step 7: Build forecast inputs object
+    // Combine income and expense events
+    const allTransactionEvents = [...incomeEvents, ...expenseEvents];
 
     const inputs: ForecastInputs = {
       userId: user.uid,
@@ -128,17 +216,17 @@ export async function POST(request: NextRequest) {
       carryoverBalance,
       billInstances,
       plannedSpending,
-      incomeEvents: [], // TODO: Add income event support
+      incomeEvents: allTransactionEvents, // Include both income and expenses
       scenarioEdits,
     };
 
-    // Step 6: Check cache (only if no scenario edits)
-    if (!scenarioEdits || scenarioEdits.length === 0) {
+    // Step 8: Check cache (only if no scenario edits and not forcing refresh)
+    if (!forceRefresh && (!scenarioEdits || scenarioEdits.length === 0)) {
       const inputsHash = generateInputsHash(inputs);
       const cached = await getCachedForecast(user.uid, inputsHash);
       
       if (cached) {
-        console.log("Returning cached forecast");
+        console.log("[Cash Runway] Returning cached forecast");
         return NextResponse.json({ forecast: cached, cached: true });
       }
     }
@@ -159,6 +247,9 @@ export async function POST(request: NextRequest) {
         carryoverBalance,
         billInstancesCount: billInstances.length,
         plannedSpendingCount: plannedSpending.length,
+        incomeTransactionsCount: incomeEvents.length,
+        expenseTransactionsCount: expenseEvents.length,
+        totalTransactionsCount: allTransactionEvents.length,
         calculationTimeMs: Date.now() - startDate.getTime(),
       },
     });

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { useDeletedCategories } from "@/hooks/useDeletedCategories";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { collection, query, where, orderBy as fbOrderBy, onSnapshot, doc, setDoc, Timestamp } from "firebase/firestore";
@@ -41,7 +41,8 @@ import {
   Landmark,
   ArrowLeftRight,
   Ban,
-  GripVertical
+  GripVertical,
+  Upload
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { 
@@ -187,6 +188,7 @@ type StatusFilter = "for-review" | "categorized" | "excluded";
 
 export default function Transactions() {
   const { user } = useAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
@@ -261,40 +263,70 @@ export default function Transactions() {
     toast({ title: "Group created", description: `"${newGroupName.trim()}" added` });
   };
   
-  // Fetch transactions from Firestore
+  // Fetch transactions from Firestore (hierarchical structure - last 6 months)
   useEffect(() => {
     if (!user) {
       setIsLoadingTransactions(false);
       return;
     }
 
-    const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', user.uid),
-      fbOrderBy('date', 'desc')
-    );
+    // Query last 6 months of transactions
+    const now = new Date();
+    const months: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push(month);
+    }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const txns = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          accountId: data.accountId,
-          description: data.description,
-          amount: data.amount,
-          type: data.type,
-          category: data.category || 'Uncategorized',
-          date: data.date?.toDate?.()?.toISOString?.().split('T')[0] || new Date().toISOString().split('T')[0],
-        };
+    const unsubscribes: (() => void)[] = [];
+    const allTxns: any[] = [];
+
+    // Subscribe to each month's transactions
+    months.forEach(month => {
+      const monthPath = `transactions/${user.uid}/${month}`;
+      const monthCollection = collection(db, monthPath);
+      const q = query(monthCollection, fbOrderBy('date', 'desc'));
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        // Remove old transactions from this month
+        const filtered = allTxns.filter(t => {
+          const txnDate = new Date(t.date);
+          const txnMonth = `${txnDate.getFullYear()}-${String(txnDate.getMonth() + 1).padStart(2, '0')}`;
+          return txnMonth !== month;
+        });
+        
+        // Add new transactions from this month
+        const newTxns = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const txnDate = data.date?.toDate?.() || new Date();
+          return {
+            id: doc.id,
+            accountId: data.accountId,
+            description: data.description,
+            amount: data.amount,
+            type: data.type,
+            category: data.category || 'Uncategorized',
+            date: txnDate.toISOString().split('T')[0],
+            month, // Store month for updates
+          };
+        });
+        
+        allTxns.length = 0;
+        allTxns.push(...filtered, ...newTxns);
+        // Sort by date descending
+        allTxns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setTransactions([...allTxns]);
+        setIsLoadingTransactions(false);
+      }, (error) => {
+        console.error(`Error fetching transactions for ${month}:`, error);
+        setIsLoadingTransactions(false);
       });
-      setTransactions(txns);
-      setIsLoadingTransactions(false);
-    }, (error) => {
-      console.error('Error fetching transactions:', error);
-      setIsLoadingTransactions(false);
+      
+      unsubscribes.push(unsubscribe);
     });
 
-    return () => unsubscribe();
+    return () => unsubscribes.forEach(unsub => unsub());
   }, [user]);
 
   // Fetch custom categories from Firestore
@@ -405,8 +437,15 @@ export default function Transactions() {
     if (!category || category === "Uncategorized") return;
     
     try {
-      // Update in Firestore
-      const transactionRef = doc(db, 'transactions', transactionId);
+      // Find the transaction to get its month
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction || !transaction.month) {
+        throw new Error('Transaction not found or missing month data');
+      }
+      
+      // Update in Firestore using hierarchical path
+      const monthPath = `transactions/${user?.uid}/${transaction.month}`;
+      const transactionRef = doc(db, monthPath, transactionId);
       await setDoc(transactionRef, {
         category,
         updatedAt: Timestamp.now(),
@@ -542,10 +581,16 @@ export default function Transactions() {
               See where your money goes
             </p>
           </div>
-          <Button onClick={() => setIsAddCategoryOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Category
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push('/import-statement')}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Statement
+            </Button>
+            <Button onClick={() => setIsAddCategoryOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Category
+            </Button>
+          </div>
         </div>
 
         {/* QuickBooks-style Status Tabs */}

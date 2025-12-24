@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { usePlaidLink as usePlaidLinkOriginal, PlaidLinkOnSuccess, PlaidLinkOptions } from 'react-plaid-link';
 import { toast } from 'sonner';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, Timestamp, collection, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
+import { getMonthString } from '@/lib/firebase/firestore';
 
 interface UsePlaidLinkProps {
   userId: string | null;
@@ -106,15 +107,21 @@ export const usePlaidLink = ({ userId, onSuccess, onExit }: UsePlaidLinkProps) =
           });
         }
 
-        // Store transactions in Firestore
+        // Store transactions in Firestore with new hierarchical structure
         for (const transaction of data.transactions) {
-          const transactionRef = doc(db, 'transactions', transaction.transactionId);
+          const txnDate = Timestamp.fromDate(new Date(transaction.date));
+          const month = getMonthString(txnDate);
+          
+          // Path: transactions/{userId}/{month}/{transactionId}
+          const monthCollectionRef = collection(db, `transactions/${userId}/${month}`);
+          const transactionRef = doc(monthCollectionRef, transaction.transactionId);
+          
           await setDoc(transactionRef, {
-            userId,
+            // Do NOT include userId - it's implicit in the path
             source: 'plaid',
             accountId: transaction.accountId,
             plaidTransactionId: transaction.transactionId,
-            date: Timestamp.fromDate(new Date(transaction.date)),
+            date: txnDate,
             authorizedDate: transaction.authorizedDate ? Timestamp.fromDate(new Date(transaction.authorizedDate)) : null,
             description: transaction.name,
             merchantName: transaction.merchantName,

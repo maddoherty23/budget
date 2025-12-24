@@ -603,16 +603,16 @@ export default function Budget() {
     return () => unsubscribe();
   }, [user]);
 
-  // Load transactions from Firebase
+  // Load transactions from Firebase (current month for budget calculations)
   useEffect(() => {
     if (!user) return;
 
-    const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', user.uid)
-    );
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthPath = `transactions/${user.uid}/${currentMonth}`;
+    const monthCollection = collection(db, monthPath);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(monthCollection, (snapshot) => {
       const txns = snapshot.docs.map(doc => {
         const data = doc.data();
         return {

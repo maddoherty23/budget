@@ -27,7 +27,7 @@ export default function CashRunwayDashboard() {
     loadForecast();
   }, []);
 
-  const loadForecast = async () => {
+  const loadForecast = async (forceRefresh = false) => {
     try {
       setLoading(true);
       setError(null);
@@ -35,7 +35,7 @@ export default function CashRunwayDashboard() {
       const response = await fetch("/api/cash/forecast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ forceRefresh }),
       });
 
       if (!response.ok) {
@@ -53,7 +53,7 @@ export default function CashRunwayDashboard() {
   };
 
   const handleRefresh = () => {
-    loadForecast();
+    loadForecast(true); // Force refresh to bypass cache
   };
 
   if (loading) {

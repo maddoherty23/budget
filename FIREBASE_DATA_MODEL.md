@@ -122,13 +122,13 @@ Connected bank institutions (Plaid Items).
 ### 4. transactions
 Financial transactions (manual and from Plaid).
 
-**Collection:** `transactions`  
+**Collection:** `transactions/{userId}/{month}/{transactionId}`  
+**Hierarchical Path Structure:** Transactions are organized by user and month (YYYY-MM format)
 **Document ID:** Auto-generated or Plaid transaction ID
 
 ```typescript
 {
-  // Ownership
-  userId: string;                 // Firebase Auth UID
+  // Note: userId is implicit in the path, not stored as a field
   
   // Source
   source: string;                 // "plaid", "manual"
@@ -169,12 +169,10 @@ Financial transactions (manual and from Plaid).
 ```
 
 **Indexes:**
-- `userId` (ascending)
-- `date` (descending)
-- Composite: `userId` + `date` (descending)
-- Composite: `userId` + `category`
-- Composite: `userId` + `needsReview`
-- Composite: `userId` + `excluded`
+- `date` (descending) - Within each month subcollection
+- `category` (ascending) - Within each month subcollection
+- Note: Composite indexes with userId are no longer needed due to path-based scoping
+- Collection group queries may require additional indexes (Firestore will prompt)
 
 **Best Practices:**
 - Use negative amounts for expenses, positive for income
@@ -478,16 +476,44 @@ const accountsQuery = query(
 
 ### Get Transactions for Current Month
 ```typescript
-const startOfMonth = new Date(year, month, 1);
-const endOfMonth = new Date(year, month + 1, 0);
+const now = new Date();
+const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+// Query specific month subcollection
 const transactionsQuery = query(
-  collection(db, 'transactions'),
-  where('userId', '==', userId),
-  where('date', '>=', Timestamp.fromDate(startOfMonth)),
-  where('date', '<=', Timestamp.fromDate(endOfMonth)),
+  collection(db, `transactions/${userId}/${month}`),
   where('excluded', '==', false),
   orderBy('date', 'desc')
+);
+```
+
+### Get Transactions Across Multiple Months
+```typescript
+import { getMonthsInRange } from '@/lib/firebase/firestore';
+
+const startDate = new Date(2024, 0, 1); // Jan 1, 2024
+const endDate = new Date(2024, 11, 31); // Dec 31, 2024
+const months = getMonthsInRange(startDate, endDate);
+
+const allTransactions = [];
+for (const month of months) {
+  const monthQuery = query(
+    collection(db, `transactions/${userId}/${month}`),
+    orderBy('date', 'desc')
+  );
+  const snapshot = await getDocs(monthQuery);
+  allTransactions.push(...snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+}
+```
+
+### Get All Transactions Using Collection Group (Less Efficient)
+```typescript
+// Query across all user's transactions regardless of month
+// Note: Requires collection group index in Firestore
+const transactionsQuery = query(
+  collectionGroup(db, userId),
+  orderBy('date', 'desc'),
+  limit(100)
 );
 ```
 
@@ -582,9 +608,9 @@ service cloud.firestore {
       allow write: if false; // Only backend should write
     }
     
-    // Transactions
-    match /transactions/{transactionId} {
-      allow read, write: if isOwner(resource.data.userId);
+    // Transactions - hierarchical structure
+    match /transactions/{userId}/{month}/{transactionId} {
+      allow read, write: if isOwner(userId);
     }
     
     // Budgets

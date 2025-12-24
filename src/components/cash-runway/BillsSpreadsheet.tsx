@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { CashForecast } from "@/lib/cash-runway/types";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
+import { useAuth } from "@/hooks/useAuth";
 
 interface BillsSpreadsheetProps {
   forecast: CashForecast;
@@ -15,10 +18,109 @@ interface SpreadsheetRow {
   amount?: number;
   type: "header" | "total" | "income" | "expense" | "savings" | "section";
   category?: string;
+  vendorName?: string; // For tracking vendor spending
+}
+
+interface Vendor {
+  id: string;
+  name: string;
+  totalSpent: number;
 }
 
 export default function BillsSpreadsheet({ forecast, viewMode }: BillsSpreadsheetProps) {
+  const { user } = useAuth();
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+
+  // Fetch vendors from Firestore
+  useEffect(() => {
+    if (!user) {
+      console.log('[BillsSpreadsheet] No user, skipping vendors fetch');
+      return;
+    }
+
+    console.log('[BillsSpreadsheet] Fetching vendors for user:', user.uid);
+    const q = query(
+      collection(db, 'vendors'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const vendorData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name,
+        totalSpent: doc.data().totalSpent,
+      }));
+      console.log('[BillsSpreadsheet] Vendors loaded:', vendorData.length, vendorData);
+      setVendors(vendorData);
+    }, (error) => {
+      console.error('[BillsSpreadsheet] Error fetching vendors:', error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Fetch transactions for the date range
+  useEffect(() => {
+    if (!user) {
+      console.log('[BillsSpreadsheet] No user, skipping transactions fetch');
+      return;
+    }
+
+    const now = new Date();
+    const months: string[] = [];
+    // Query past 6 months plus current month (for historical data)
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push(month);
+    }
+
+    console.log('[BillsSpreadsheet] Fetching transactions for months:', months);
+    const unsubscribes: (() => void)[] = [];
+    const allTxns: any[] = [];
+
+    months.forEach(month => {
+      const monthPath = `transactions/${user.uid}/${month}`;
+      const monthCollection = collection(db, monthPath);
+      const q = query(monthCollection);
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        console.log(`[BillsSpreadsheet] Loaded ${snapshot.docs.length} transactions for ${month}`);
+        const newTxns = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const txnDate = data.date?.toDate?.() || new Date();
+          return {
+            id: doc.id,
+            description: data.description,
+            amount: data.amount,
+            type: data.type,
+            category: data.category,
+            date: txnDate,
+          };
+        });
+        
+        // Merge transactions
+        const otherMonthTxns = allTxns.filter(t => {
+          const txnDate = new Date(t.date);
+          const txnMonth = `${txnDate.getFullYear()}-${String(txnDate.getMonth() + 1).padStart(2, '0')}`;
+          return txnMonth !== month;
+        });
+        
+        allTxns.length = 0;
+        allTxns.push(...otherMonthTxns, ...newTxns);
+        console.log('[BillsSpreadsheet] Total transactions loaded:', allTxns.length);
+        setTransactions([...allTxns]);
+      }, (error) => {
+        console.error(`[BillsSpreadsheet] Error fetching transactions for ${month}:`, error);
+      });
+      
+      unsubscribes.push(unsubscribe);
+    });
+
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [user]);
 
   // Get dates based on view mode
   const today = new Date();
@@ -41,31 +143,86 @@ export default function BillsSpreadsheet({ forecast, viewMode }: BillsSpreadshee
     });
   };
 
-  // Mock data structure
+  // Build rows from real data
   const allRows: SpreadsheetRow[] = [
     { label: "RUNNING TOTAL", type: "total" },
     { label: "Total OUT", type: "total" },
     { label: "Total IN", type: "total" },
     { label: "", type: "section" },
-    { label: "INCOME", type: "header", category: "income" },
-    { label: "CARRY OVER", amount: 1395.8, type: "income", category: "income" },
-    { label: "EXTRA MONEY", type: "income", category: "income" },
-    { label: "MOM PAY", amount: 1290, type: "income", category: "income" },
-    { label: "MOM SSI", amount: 2113, type: "income", category: "income" },
-    { label: "DAD RETIRE", type: "income", category: "income" },
-    { label: "KPUMP", type: "income", category: "income" },
-    { label: "DAD SSI", type: "income", category: "income" },
-    { label: "", type: "section" },
-    { label: "SAVINGS & ADJUSTMENTS", type: "header", category: "savings" },
-    { label: "Adjust", type: "expense", category: "savings" },
-    { label: "Savings", amount: 700, type: "savings", category: "savings" },
-    { label: "Float", type: "savings", category: "savings" },
-    { label: "", type: "section" },
-    { label: "HOUSE BILLS", type: "header", category: "house" },
-    { label: "House (1st)", amount: -2800, type: "expense", category: "house" },
-    { label: "Co-Propane (31)", type: "expense", category: "house" },
-    { label: "Pred (2nd)", amount: -297, type: "expense", category: "house" },
   ];
+
+  // Add income section with real income transactions
+  const incomeTransactions = transactions.filter(t => t.type === 'income' && t.category !== 'Exclude');
+  console.log('[BillsSpreadsheet] Income transactions:', incomeTransactions.length);
+  if (incomeTransactions.length > 0) {
+    allRows.push({ label: "INCOME", type: "header", category: "income" });
+    
+    // Group income by description
+    const incomeByName = incomeTransactions.reduce((acc, t) => {
+      const name = t.description || 'Unknown Income';
+      if (!acc[name]) {
+        acc[name] = [];
+      }
+      acc[name].push(t);
+      return acc;
+    }, {} as Record<string, any[]>);
+    
+    // Sort by name
+    Object.entries(incomeByName)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([name]) => {
+        allRows.push({ 
+          label: name,
+          type: "income", 
+          category: "income",
+          vendorName: name, // Track vendor name for matching transactions
+        });
+      });
+    
+    allRows.push({ label: "", type: "section" });
+  }
+
+  // Add ALL expense vendors (from transactions) - this is the default view
+  // Include uncategorized expenses as well
+  const expenseTransactions = transactions.filter(t => 
+    t.type === 'expense' && 
+    t.category !== 'Exclude'
+  );
+  
+  console.log('[BillsSpreadsheet] Expense transactions:', expenseTransactions.length);
+  console.log('[BillsSpreadsheet] Total rows to render:', allRows.length);
+  
+  if (expenseTransactions.length > 0) {
+    allRows.push({ label: "EXPENSES", type: "header", category: "expenses" });
+    
+    // Group ALL expenses by vendor/description (not by category)
+    const expensesByVendor = expenseTransactions.reduce((acc, t) => {
+      const vendorName = t.description || 'Unknown';
+      if (!acc[vendorName]) {
+        acc[vendorName] = [];
+      }
+      acc[vendorName].push(t);
+      return acc;
+    }, {} as Record<string, any[]>);
+    
+    // Sort vendors by total spending (highest first)
+    Object.entries(expensesByVendor)
+      .sort(([, aTxns], [, bTxns]) => {
+        const aTotal = aTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        const bTotal = bTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        return bTotal - aTotal;
+      })
+      .forEach(([vendorName]) => {
+        allRows.push({
+          label: vendorName,
+          type: "expense",
+          category: "expenses",
+          vendorName: vendorName, // Track vendor name for matching transactions
+        });
+      });
+    
+    allRows.push({ label: "", type: "section" });
+  }
 
   // Filter rows based on collapsed categories
   const rows = allRows.filter(row => {
@@ -91,14 +248,26 @@ export default function BillsSpreadsheet({ forecast, viewMode }: BillsSpreadshee
   };
 
   const getCellValue = (row: SpreadsheetRow, dateIndex: number): number | null => {
-    // For demo purposes, return mock data on specific days
-    if (row.label === "CARRY OVER" && dateIndex === 0) return 1395.8;
-    if (row.label === "MOM PAY" && dateIndex === 5) return 1290;
-    if (row.label === "MOM SSI" && dateIndex === 10) return 2113;
-    if (row.label === "Savings" && dateIndex === 0) return -700;
-    if (row.label === "House (1st)" && dateIndex === 0) return -2800;
-    if (row.label === "Pred (2nd)" && dateIndex === 0) return -297;
-    if (row.label === "Adjust" && [3, 6, 13].includes(dateIndex)) return dateIndex === 3 ? 400 : dateIndex === 6 ? -200 : -200;
+    const targetDate = dates[dateIndex];
+    if (!targetDate) return null;
+    
+    // For rows with vendorName, find ALL transactions matching that vendor on this specific date
+    if (row.vendorName) {
+      const matchingTxns = transactions.filter(t => {
+        const txnDate = new Date(t.date);
+        const dateMatches = txnDate.getDate() === targetDate.getDate() &&
+                           txnDate.getMonth() === targetDate.getMonth() &&
+                           txnDate.getFullYear() === targetDate.getFullYear();
+        const vendorMatches = t.description === row.vendorName;
+        return dateMatches && vendorMatches;
+      });
+      
+      if (matchingTxns.length > 0) {
+        const total = matchingTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        return row.type === "income" ? total : -total;
+      }
+    }
+    
     return null;
   };
 
@@ -107,7 +276,7 @@ export default function BillsSpreadsheet({ forecast, viewMode }: BillsSpreadshee
     if (row.type === "header") return "bg-orange-100 font-bold";
     if (row.type === "income") return "bg-green-50";
     if (row.type === "savings") return "bg-blue-50";
-    if (row.category === "house") return "bg-orange-50";
+    if (row.type === "expense") return "bg-red-50";
     return "";
   };
 

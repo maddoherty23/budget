@@ -32,12 +32,13 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
-    // Transactions collection - user-scoped access
-    match /transactions/{transactionId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && hasValidUserId();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    // Transactions collection - hierarchical structure: transactions/{userId}/{month}/{transactionId}
+    // Path-based security: userId is embedded in the path, not as a field
+    match /transactions/{userId}/{month=**} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+      allow delete: if isAuthenticated() && isOwner(userId);
     }
     
     // Categories collection - user-scoped access
@@ -100,6 +101,14 @@ service cloud.firestore {
     match /userPreferences/{prefId} {
       // Allow read if document exists and belongs to user, or allow query (for creating default prefs)
       allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && hasValidUserId();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Vendors collection - user-scoped access
+    match /vendors/{vendorId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && hasValidUserId();
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;

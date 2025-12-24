@@ -147,32 +147,57 @@ export default function Reports() {
     return () => unsubscribe();
   }, [user]);
 
-  // Load transactions from Firebase
+  // Load transactions from Firebase (last 12 months for reports)
   useEffect(() => {
     if (!user) return;
 
-    const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', user.uid)
-    );
+    // Query last 12 months for comprehensive reports
+    const now = new Date();
+    const months: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push(month);
+    }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const txns = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          accountId: data.accountId,
-          description: data.description,
-          amount: data.amount,
-          type: data.type,
-          category: data.category || 'Uncategorized',
-          date: data.date?.toDate?.() || new Date(),
-        };
+    const unsubscribes: (() => void)[] = [];
+    const allTxns: any[] = [];
+
+    // Subscribe to each month's transactions
+    months.forEach(month => {
+      const monthPath = `transactions/${user.uid}/${month}`;
+      const monthCollection = collection(db, monthPath);
+      
+      const unsubscribe = onSnapshot(monthCollection, (snapshot) => {
+        // Remove old transactions from this month
+        const filtered = allTxns.filter(t => {
+          const txnMonth = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`;
+          return txnMonth !== month;
+        });
+        
+        // Add new transactions from this month
+        const newTxns = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            accountId: data.accountId,
+            description: data.description,
+            amount: data.amount,
+            type: data.type,
+            category: data.category || 'Uncategorized',
+            date: data.date?.toDate?.() || new Date(),
+          };
+        });
+        
+        allTxns.length = 0;
+        allTxns.push(...filtered, ...newTxns);
+        setTransactions([...allTxns]);
       });
-      setTransactions(txns);
+      
+      unsubscribes.push(unsubscribe);
     });
 
-    return () => unsubscribe();
+    return () => unsubscribes.forEach(unsub => unsub());
   }, [user]);
 
   // Load accounts from Firebase

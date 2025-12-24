@@ -44,6 +44,12 @@ export {
   createCategory,
   getCategories,
   deleteCategory,
+  // Connected Account functions
+  createConnectedAccount,
+  getConnectedAccount,
+  getConnectedAccounts,
+  updateConnectedAccount,
+  deleteConnectedAccount,
   // Query utilities
   where,
   orderBy,
@@ -53,4 +59,5 @@ export {
   type Budget,
   type Transaction,
   type Category,
+  type ConnectedAccount,
 } from "./firestore";

@@ -25,7 +25,7 @@ interface ReviewTransaction extends ParsedTransaction {
 }
 
 export default function StatementImport() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, loading: authLoading } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>("");
@@ -58,9 +58,21 @@ export default function StatementImport() {
   };
 
   const handleUpload = async () => {
-    console.log("🔍 handleUpload called", { file, currentUser: !!currentUser });
-    if (!file || !currentUser) {
-      console.log("⚠️ Upload blocked - missing file or user", { hasFile: !!file, hasUser: !!currentUser });
+    console.log("🔍 handleUpload called", { 
+      file: file?.name, 
+      currentUser: currentUser?.uid,
+      authLoading 
+    });
+    
+    if (!currentUser) {
+      setError("You must be logged in to upload statements");
+      console.error("⚠️ Upload blocked - user not authenticated");
+      return;
+    }
+    
+    if (!file) {
+      setError("Please select a file first");
+      console.error("⚠️ Upload blocked - no file selected");
       return;
     }
 
@@ -180,6 +192,7 @@ export default function StatementImport() {
             parseInt(dateParts[2])
           );
 
+          // createTransaction now automatically handles the hierarchical path based on date
           await createTransaction({
             amount: Math.abs(txn.amountCents) / 100, // Convert cents to dollars
             type: txn.type,
@@ -256,7 +269,7 @@ export default function StatementImport() {
                   {file && (
                     <Button
                       onClick={handleUpload}
-                      disabled={isUploading || reviewTransactions.length > 0}
+                      disabled={isUploading || reviewTransactions.length > 0 || !currentUser || authLoading}
                       className="min-w-[120px]"
                     >
                       {isUploading ? (
@@ -280,6 +293,16 @@ export default function StatementImport() {
                   </div>
                 )}
               </div>
+
+              {/* Auth Warning */}
+              {!authLoading && !currentUser && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    You must be logged in to upload statements. Please refresh the page or log in again.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Progress Indicator */}
               {isUploading && uploadProgress && (

@@ -86,9 +86,14 @@ export default function DashboardCFO() {
 
     const fetchTransactions = async () => {
       try {
+        // Query current month transactions for CFO dashboard
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const monthPath = `transactions/${user.uid}/${currentMonth}`;
+        const monthCollection = collection(db, monthPath);
+        
         const q = query(
-          collection(db, 'transactions'),
-          where('userId', '==', user.uid),
+          monthCollection,
           orderBy('date', 'desc'),
           limit(10)
         );

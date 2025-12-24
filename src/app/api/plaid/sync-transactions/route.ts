@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { plaidClient } from '@/lib/plaid/config';
-import { doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, Timestamp, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
+import { getMonthString } from '@/lib/firebase/firestore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,13 +25,17 @@ export async function POST(request: NextRequest) {
     const transactions = response.data.transactions;
     let syncedCount = 0;
 
-    // Store each transaction in Firestore
+    // Store each transaction in Firestore with new hierarchical structure
     for (const transaction of transactions) {
-      const transactionRef = doc(db, 'transactions', transaction.transaction_id);
+      const txnDate = Timestamp.fromDate(new Date(transaction.date));
+      const month = getMonthString(txnDate);
+      
+      // Path: transactions/{userId}/{month}/{transactionId}
+      const monthCollectionRef = collection(db, `transactions/${userId}/${month}`);
+      const transactionRef = doc(monthCollectionRef, transaction.transaction_id);
       
       await setDoc(transactionRef, {
-        // Ownership
-        userId,
+        // Do NOT include userId - it's implicit in the path
         
         // Source
         source: 'plaid',
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
         plaidTransactionId: transaction.transaction_id,
         
         // Transaction details
-        date: Timestamp.fromDate(new Date(transaction.date)),
+        date: txnDate,
         authorizedDate: transaction.authorized_date 
           ? Timestamp.fromDate(new Date(transaction.authorized_date))
           : null,

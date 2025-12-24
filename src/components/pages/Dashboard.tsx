@@ -46,36 +46,58 @@ export default function Dashboard() {
     return () => unsubscribe();
   }, [user]);
 
-  // Load transactions from Firebase
+  // Load transactions from Firebase (hierarchical structure)
   useEffect(() => {
     if (!user) {
       setIsLoading(false);
       return;
     }
 
-    const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', user.uid)
-    );
+    // Query current and previous month for dashboard data
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const txns = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          accountId: data.accountId,
-          description: data.description,
-          amount: data.amount,
-          type: data.type,
-          category: data.category || 'Uncategorized',
-          date: data.date?.toDate?.() || new Date(),
-        };
+    const unsubscribes: (() => void)[] = [];
+    const allTxns: any[] = [];
+
+    // Query both months
+    [currentMonth, previousMonth].forEach(month => {
+      const monthPath = `transactions/${user.uid}/${month}`;
+      const monthCollection = collection(db, monthPath);
+      
+      const unsubscribe = onSnapshot(monthCollection, (snapshot) => {
+        // Remove old transactions from this month
+        const filtered = allTxns.filter(t => {
+          const txnMonth = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`;
+          return txnMonth !== month;
+        });
+        
+        // Add new transactions from this month
+        const newTxns = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            accountId: data.accountId,
+            description: data.description,
+            amount: data.amount,
+            type: data.type,
+            category: data.category || 'Uncategorized',
+            date: data.date?.toDate?.() || new Date(),
+          };
+        });
+        
+        allTxns.length = 0;
+        allTxns.push(...filtered, ...newTxns);
+        setTransactions([...allTxns]);
+        setIsLoading(false);
       });
-      setTransactions(txns);
-      setIsLoading(false);
+      
+      unsubscribes.push(unsubscribe);
     });
 
-    return () => unsubscribe();
+    return () => unsubscribes.forEach(unsub => unsub());
   }, [user]);
 
   // Calculate monthly income and expenses
