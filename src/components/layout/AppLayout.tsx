@@ -18,7 +18,10 @@ import {
   TrendingUp,
   Calendar,
   Sheet,
-  Banknote
+  Banknote,
+  Bug,
+  Recycle,
+  Sliders
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -32,17 +35,28 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-const navItems = [
+interface NavItem {
+  path: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  devOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
   { path: "/dashboard", label: "Home", icon: LayoutDashboard },
   { path: "/budget", label: "Budget", icon: Wallet },
   { path: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { path: "/savings-levers", label: "Savings Levers", icon: Sliders },
+  { path: "/recovery", label: "Recovery", icon: Recycle },
   { path: "/reports", label: "Reports", icon: BarChart3 },
   { path: "/categories", label: "Categories", icon: Tags },
   { path: "/cash-runway", label: "Cash Runway", icon: TrendingUp },
+  { path: "/compounding-lens", label: "Compounding Lens", icon: Sparkles },
   { path: "/calendar", label: "Calendar", icon: Calendar },
   { path: "/spreadsheet", label: "Spreadsheet", icon: Sheet },
   { path: "/income-settings", label: "Income Sources", icon: Banknote },
   { path: "/settings", label: "Settings", icon: Settings },
+  { path: "/auth-debug", label: "Auth Debug", icon: Bug, devOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -109,24 +123,26 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 space-y-1 p-4">
-            {navItems.map((item) => {
-              const isActive = pathname === item.path;
-              return (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200",
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              );
-            })}
+            {navItems
+              .filter((item) => !item.devOnly || process.env.NODE_ENV === 'development')
+              .map((item) => {
+                const isActive = pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                );
+              })}
           </nav>
 
           {/* Footer Links */}
@@ -234,25 +250,27 @@ export function AppLayout({ children }: AppLayoutProps) {
             )}
 
             <div className="space-y-1">
-              {navItems.map((item) => {
-                const isActive = pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    href={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    )}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.label}
-                  </Link>
-                );
-              })}
+              {navItems
+                .filter((item) => !item.devOnly || process.env.NODE_ENV === 'development')
+                .map((item) => {
+                  const isActive = pathname === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      href={item.path}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200",
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      )}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
               
               {/* Footer Links */}
               <div className="pt-4 mt-4 border-t border-border space-y-1">

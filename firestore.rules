@@ -172,6 +172,18 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
     
+    // ========================================================================
+    // Recovery Engine Collections
+    // ========================================================================
+    
+    // Recovery Insights collection - user-scoped access
+    match /recovery_insights/{insightId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && hasValidUserId();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && hasValidUserId();
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

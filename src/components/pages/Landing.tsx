@@ -18,6 +18,7 @@ import {
   X
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import CompoundingLensesSection from "@/components/landing/CompoundingLensesSection";
 
 const features = [
   {
@@ -337,6 +338,9 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* Compounding Lenses Section */}
+      <CompoundingLensesSection />
 
       {/* Pricing Section */}
       <section id="pricing" className="scroll-mt-20 border-t border-border bg-secondary/20 py-20 md:py-32">

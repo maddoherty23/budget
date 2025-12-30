@@ -86,6 +86,31 @@ export interface Vendor {
   updatedAt?: Timestamp;
 }
 
+export interface RecoveryInsight {
+  id?: string;
+  userId: string;
+  type: "subscription" | "duplicate" | "price_creep" | "fee_leak" | "refund_credit";
+  title: string;
+  summary: string;
+  estimatedMonthlySavings: number;
+  estimatedAnnualSavings: number;
+  confidence: number;
+  effort: number;
+  safetyImpact: number;
+  recoveryScore: number;
+  evidence: Array<{
+    transactionId: string;
+    date: Date;
+    merchant: string;
+    amount: number;
+    note?: string;
+  }>;
+  status: "active" | "done" | "snoozed" | "dismissed";
+  snoozedUntil?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface ConnectedAccount {
   id?: string;
   userId: string;
@@ -537,6 +562,23 @@ export const updateVendor = (id: string, data: Partial<Vendor>) =>
 
 export const deleteVendor = (id: string) =>
   deleteDocument("vendors", id);
+
+// RecoveryInsight-specific functions
+export const createRecoveryInsight = (
+  data: Omit<RecoveryInsight, "id" | "userId" | "createdAt" | "updatedAt">
+) => createDocument<RecoveryInsight>("recovery_insights", data);
+
+export const getRecoveryInsight = (id: string) =>
+  getDocument<RecoveryInsight>("recovery_insights", id);
+
+export const getRecoveryInsights = (constraints: QueryConstraint[] = []) =>
+  getDocuments<RecoveryInsight>("recovery_insights", constraints);
+
+export const updateRecoveryInsight = (id: string, data: Partial<RecoveryInsight>) =>
+  updateDocument<RecoveryInsight>("recovery_insights", id, data);
+
+export const deleteRecoveryInsight = (id: string) =>
+  deleteDocument("recovery_insights", id);
 
 // Utility exports for building queries
 export { where, orderBy, limit, Timestamp };

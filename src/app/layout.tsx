@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-import { AuthDebug } from "@/components/debug/AuthDebug";
 
 export const metadata: Metadata = {
   title: "Budget Buddy",
@@ -18,7 +17,6 @@ export default function RootLayout({
       <body className="antialiased">
         <Providers>
           {children}
-          <AuthDebug />
         </Providers>
       </body>
     </html>
